@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Filamentos Intermedios - Ensamblaje</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  h1 {
+    font-size: 1.3rem;
+    text-align: center;
+    margin-bottom: 4px;
+    color: #58a6ff;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .subtitle { font-size: 0.78rem; color: #8b949e; margin-bottom: 14px; text-align: center; }
+  canvas {
+    background: #161b22;
+    border-radius: 16px;
+    border: 1px solid #30363d;
+    max-width: 100%;
+  }
+  .info-box {
+    margin-top: 12px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 12px 18px;
+    max-width: 700px;
+    width: 100%;
+    text-align: center;
+  }
+  .stage-name { font-size: 1rem; font-weight: bold; color: #58a6ff; margin-bottom: 5px; }
+  .stage-desc { font-size: 0.8rem; color: #c9d1d9; line-height: 1.5; }
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+  }
+  button {
+    padding: 9px 20px;
+    border: 2px solid #58a6ff;
+    background: transparent;
+    color: #58a6ff;
+    font-size: 0.85rem;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  button:hover { background: #58a6ff; color: #0d1117; }
+  button.active { background: #58a6ff; color: #0d1117; }
+  .speed-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 6px 14px;
+  }
+  .speed-box label { font-size: 0.8rem; color: #8b949e; }
+  .speed-box input[type=range] { width: 90px; accent-color: #58a6ff; }
+  .speed-val { font-size: 0.82rem; color: #58a6ff; font-weight: bold; min-width: 28px; }
+  .progress-bar {
+    width: 100%; max-width: 700px; height: 5px;
+    background: #30363d; border-radius: 3px; margin-top: 12px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #58a6ff, #3fb950);
+    border-radius: 3px; transition: width 0.4s;
+  }
+  .legend {
+    display: flex; gap: 16px; margin-top: 10px;
+    flex-wrap: wrap; justify-content: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: #8b949e; }
+  .legend-line { width: 22px; height: 4px; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<h1>Ensamblaje del Filamento Intermedio</h1>
+<p class="subtitle">Formación desde monómero → dímero → tetrámero → filamento (7-11 nm)</p>
+
+<canvas id="canvas" width="700" height="400"></canvas>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-line" style="background:#e07b54"></div> Extremo N (amino)</div>
+  <div class="legend-item"><div class="legend-line" style="background:#58a6ff"></div> Región central (bastón)</div>
+  <div class="legend-item"><div class="legend-line" style="background:#3fb950"></div> Extremo C (carboxilo)</div>
+</div>
+
+<div class="progress-bar">
+  <div class="progress-fill" id="progressFill" style="width:0%"></div>
+</div>
+
+<div class="info-box">
+  <div class="stage-name" id="stageName">Etapa 1: Monómero</div>
+  <div class="stage-desc" id="stageDesc">Cadena proteica fibrosa con región N-terminal (cabeza), dominio central en bastón (coiled-coil) y región C-terminal (cola). Ejemplos: queratina, vimentina, láminas nucleares.</div>
+</div>
+
+<div class="controls">
+  <button id="playBtn" onclick="togglePlay()">▶ INICIAR</button>
+  <button onclick="restart()">↺ REINICIAR</button>
+  <button onclick="nextStage()">SIGUIENTE →</button>
+  <div class="speed-box">
+    <label>Velocidad</label>
+    <input type="range" id="speedSlider" min="1" max="5" value="2" oninput="updateSpeed()">
+    <span class="speed-val" id="speedVal">x2</span>
+  </div>
+</div>
+
+<script>
+var canvas = document.getElementById('canvas');
+var ctx = canvas.getContext('2d');
+var speed = 2;
+
+var stages = [
+  { name: "Etapa 1: Monómero", desc: "Cadena proteica fibrosa con región N-terminal (cabeza, naranja), dominio central en bastón coiled-coil (azul) y región C-terminal (cola, verde). Ejemplos: queratina, vimentina, láminas nucleares.", progress: 0 },
+  { name: "Etapa 2: Dímero", desc: "Dos monómeros se alinean en paralelo y sus dominios centrales se enrollan entre sí formando una superhélice coiled-coil estable. Las regiones N y C quedan expuestas en los mismos extremos.", progress: 33 },
+  { name: "Etapa 3: Tetrámero", desc: "Dos dímeros se asocian de manera ANTIPARALELA: la región N de uno queda frente a la región C del otro. Esto elimina la polaridad del filamento: NO tiene extremo + ni extremo -.", progress: 66 },
+  { name: "Etapa 4: Filamento Intermedio", desc: "Múltiples tetrámeros se agrupan lateralmente (8 protofilamentos) y se compactan formando el filamento maduro de 7-11 nm de diámetro. Es muy resistente y flexible. Sin polaridad.", progress: 100 }
+];
+
+var currentStage = 0;
+var animT = 0;
+var playing = false;
+var animInterval = null;
+var transitionT = 0;
+var inTransition = false;
+
+function updateSpeed() {
+  speed = parseInt(document.getElementById('speedSlider').value);
+  document.getElementById('speedVal').textContent = 'x' + speed;
+}
+
+function togglePlay() {
+  playing = !playing;
+  document.getElementById('playBtn').textContent = playing ? '⏸ PAUSAR' : '▶ CONTINUAR';
+  document.getElementById('playBtn').className = playing ? 'active' : '';
+  if (playing && !animInterval) animInterval = setInterval(tick, 30);
+}
+
+function restart() {
+  playing = false; currentStage = 0; animT = 0;
+  transitionT = 0; inTransition = false;
+  clearInterval(animInterval); animInterval = null;
+  document.getElementById('playBtn').textContent = '▶ INICIAR';
+  document.getElementById('playBtn').className = '';
+  updateInfo(); draw();
+}
+
+function nextStage() {
+  if (currentStage < stages.length - 1) {
+    currentStage++; animT = 0; transitionT = 0; inTransition = true;
+    updateInfo();
+    if (!playing) { animInterval = setInterval(tick, 30); playing = true; document.getElementById('playBtn').textContent = '⏸ PAUSAR'; document.getElementById('playBtn').className = 'active'; }
+  }
+}
+
+function tick() {
+  if (!playing) return;
+  var inc = 0.006 * speed;
+  animT += inc;
+  if (inTransition) {
+    transitionT += inc * 1.4;
+    if (transitionT >= 1) { transitionT = 1; inTransition = false; }
+  } else {
+    var autoAdv = 8 / speed;
+    if (animT > autoAdv && currentStage < stages.length - 1) {
+      currentStage++; animT = 0; transitionT = 0; inTransition = true; updateInfo();
+    } else if (animT > autoAdv && currentStage === stages.length - 1) {
+      playing = false;
+      document.getElementById('playBtn').textContent = '▶ INICIAR';
+      document.getElementById('playBtn').className = '';
+      clearInterval(animInterval); animInterval = null;
+    }
+  }
+  draw();
+}
+
+function updateInfo() {
+  var s = stages[currentStage];
+  document.getElementById('stageName').textContent = s.name;
+  document.getElementById('stageDesc').textContent = s.desc;
+  document.getElementById('progressFill').style.width = s.progress + '%';
+}
+
+function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+// Draw a thin protein strand with N (orange), rod (blue), C (green) regions
+function drawStrand(x, y, len, thick, angle, alpha, flipped) {
+  ctx.save();
+  ctx.globalAlpha = alpha !== undefined ? alpha : 1;
+  ctx.translate(x, y);
+  ctx.rotate(angle || 0);
+  if (flipped) ctx.scale(-1, 1);
+
+  var half = len / 2;
+  var nLen = len * 0.18;
+  var cLen = len * 0.18;
+  var rodLen = len - nLen - cLen;
+
+  // N-terminal (head) - orange
+  var gN = ctx.createLinearGradient(-half, 0, -half + nLen, 0);
+  gN.addColorStop(0, '#ff9966'); gN.addColorStop(1, '#e07b54');
+  ctx.beginPath();
+  ctx.roundRect(-half, -thick/2, nLen, thick, thick/2);
+  ctx.fillStyle = gN; ctx.fill();
+
+  // Rod domain (central) - blue
+  var gR = ctx.createLinearGradient(-half+nLen, 0, -half+nLen+rodLen, 0);
+  gR.addColorStop(0, '#4a9eff'); gR.addColorStop(0.5, '#58a6ff'); gR.addColorStop(1, '#3d8fe0');
+  ctx.beginPath();
+  ctx.rect(-half + nLen, -thick/2, rodLen, thick);
+  ctx.fillStyle = gR; ctx.fill();
+  // helix pattern on rod
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 0.8;
+  for (var i = -half+nLen+6; i < -half+nLen+rodLen-4; i += 10) {
+    ctx.beginPath();
+    ctx.moveTo(i, -thick/2);
+    ctx.quadraticCurveTo(i+3, 0, i+6, thick/2);
+    ctx.stroke();
+  }
+
+  // C-terminal (tail) - green
+  var gC = ctx.createLinearGradient(-half+nLen+rodLen, 0, half, 0);
+  gC.addColorStop(0, '#3fb950'); gC.addColorStop(1, '#2ea043');
+  ctx.beginPath();
+  ctx.roundRect(-half+nLen+rodLen, -thick/2, cLen, thick, thick/2);
+  ctx.fillStyle = gC; ctx.fill();
+
+  ctx.restore();
+}
+
+// Draw N/C labels
+function drawNCLabels(x, y, len, thick, angle, alpha, flipped) {
+  ctx.save();
+  ctx.globalAlpha = alpha !== undefined ? alpha : 1;
+  ctx.translate(x, y);
+  ctx.rotate(angle || 0);
+  if (flipped) ctx.scale(-1, 1);
+  var half = len / 2;
+  ctx.font = 'bold 9px Arial'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#ff9966';
+  ctx.fillText('N', -half + len*0.09, thick/2 + 12);
+  ctx.fillStyle = '#2ea043';
+  ctx.fillText('C', half - len*0.09, thick/2 + 12);
+  ctx.restore();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  var cx = canvas.width / 2;
+  var cy = canvas.height / 2;
+  var t = animT;
+  var ease = easeInOut(Math.min(transitionT, 1));
+
+  // grid
+  ctx.strokeStyle = 'rgba(48,54,61,0.3)'; ctx.lineWidth = 1;
+  for (var gx = 0; gx < canvas.width; gx += 40) { ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,canvas.height); ctx.stroke(); }
+  for (var gy = 0; gy < canvas.height; gy += 40) { ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(canvas.width,gy); ctx.stroke(); }
+
+  var sLen = 200; // strand length
+  var sThick = 6;  // thin strands
+
+  if (currentStage === 0) {
+    // Two monomers floating
+    var bobA = Math.sin(t * 1.1) * 8;
+    var bobB = Math.sin(t * 1.1 + 2) * 8;
+    drawStrand(cx, cy - 55 + bobA, sLen, sThick, 0, 1, false);
+    drawNCLabels(cx, cy - 55 + bobA, sLen, sThick, 0, 1, false);
+    ctx.fillStyle = '#c9d1d9'; ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center';
+    ctx.fillText('Monómero 1', cx, cy - 55 + bobA - 16);
+
+    drawStrand(cx, cy + 55 + bobB, sLen, sThick, 0, 1, false);
+    drawNCLabels(cx, cy + 55 + bobB, sLen, sThick, 0, 1, false);
+    ctx.fillText('Monómero 2', cx, cy + 55 + bobB - 16);
+
+  } else if (currentStage === 1) {
+    // Monomers come together → dimer
+    if (inTransition) {
+      var sep = (1 - ease) * 52;
+      drawStrand(cx, cy - sep, sLen, sThick, 0, 1, false);
+      drawStrand(cx, cy + sep, sLen, sThick, 0, 1, false);
+      if (ease > 0.6) {
+        var a = (ease - 0.6) / 0.4;
+        // two parallel strands close together
+        drawStrand(cx, cy - 5, sLen, sThick, 0, a, false);
+        drawStrand(cx, cy + 5, sLen, sThick, 0, a, false);
+        drawNCLabels(cx, cy + 5, sLen, sThick, 0, a, false);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = '#a371f7'; ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center';
+        ctx.fillText('DÍMERO — paralelo', cx, cy + 28);
+        ctx.fillText('N ————————————→ C', cx, cy - 22);
+        ctx.globalAlpha = 1;
+      }
+    } else {
+      drawStrand(cx, cy - 5, sLen, sThick, 0, 1, false);
+      drawStrand(cx, cy + 5, sLen, sThick, 0, 1, false);
+      drawNCLabels(cx, cy + 5, sLen, sThick, 0, 1, false);
+      ctx.fillStyle = '#a371f7'; ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center';
+      ctx.fillText('DÍMERO — paralelo', cx, cy + 28);
+      ctx.fillStyle = '#8b949e'; ctx.font = '9px Arial';
+      ctx.fillText('N ————————————→ C  (misma orientación)', cx, cy - 22);
+    }
+
+  } else if (currentStage === 2) {
+    // Two dimers → tetramer antiparallel
+    if (inTransition) {
+      var sepD = (1 - ease) * 60;
+      // top dimer normal
+      drawStrand(cx, cy - sepD - 5, sLen, sThick, 0, 1-ease*0.4, false);
+      drawStrand(cx, cy - sepD + 5, sLen, sThick, 0, 1-ease*0.4, false);
+      // bottom dimer flipped (antiparallel)
+      drawStrand(cx, cy + sepD - 5, sLen, sThick, 0, 1-ease*0.4, true);
+      drawStrand(cx, cy + sepD + 5, sLen, sThick, 0, 1-ease*0.4, true);
+      if (ease > 0.5) {
+        var a2 = (ease - 0.5) / 0.5;
+        drawStrand(cx, cy - 15, sLen, sThick, 0, a2, false);
+        drawStrand(cx, cy - 5, sLen, sThick, 0, a2, false);
+        drawStrand(cx, cy + 5, sLen, sThick, 0, a2, true);
+        drawStrand(cx, cy + 15, sLen, sThick, 0, a2, true);
+        ctx.globalAlpha = a2;
+        ctx.fillStyle = '#3fb950'; ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center';
+        ctx.fillText('TETRÁMERO — antiparalelo', cx, cy + 36);
+        // arrows
+        ctx.strokeStyle = '#e07b54'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(cx-90, cy-30); ctx.lineTo(cx+90, cy-30); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx+84,cy-34); ctx.lineTo(cx+90,cy-30); ctx.lineTo(cx+84,cy-26); ctx.fillStyle='#e07b54'; ctx.fill();
+        ctx.strokeStyle = '#3fb950';
+        ctx.beginPath(); ctx.moveTo(cx+90, cy+30); ctx.lineTo(cx-90, cy+30); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx-84,cy+26); ctx.lineTo(cx-90,cy+30); ctx.lineTo(cx-84,cy+34); ctx.fillStyle='#3fb950'; ctx.fill();
+        ctx.fillStyle = '#8b949e'; ctx.font = '9px Arial';
+        ctx.fillText('sin polaridad', cx, cy + 48);
+        ctx.globalAlpha = 1;
+      }
+    } else {
+      drawStrand(cx, cy - 15, sLen, sThick, 0, 1, false);
+      drawStrand(cx, cy - 5, sLen, sThick, 0, 1, false);
+      drawStrand(cx, cy + 5, sLen, sThick, 0, 1, true);
+      drawStrand(cx, cy + 15, sLen, sThick, 0, 1, true);
+      ctx.fillStyle = '#3fb950'; ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center';
+      ctx.fillText('TETRÁMERO — antiparalelo', cx, cy + 36);
+      ctx.strokeStyle = '#e07b54'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(cx-90, cy-30); ctx.lineTo(cx+90, cy-30); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx+84,cy-34); ctx.lineTo(cx+90,cy-30); ctx.lineTo(cx+84,cy-26); ctx.fillStyle='#e07b54'; ctx.fill();
+      ctx.strokeStyle = '#3fb950';
+      ctx.beginPath(); ctx.moveTo(cx+90, cy+30); ctx.lineTo(cx-90, cy+30); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx-84,cy+26); ctx.lineTo(cx-90,cy+30); ctx.lineTo(cx-84,cy+34); ctx.fillStyle='#3fb950'; ctx.fill();
+      ctx.fillStyle = '#8b949e'; ctx.font = '9px Arial';
+      ctx.fillText('↑ N-terminal      C-terminal →', cx - 50, cy - 38);
+      ctx.fillText('← C-terminal      N-terminal ↑', cx + 50, cy + 48);
+    }
+
+  } else if (currentStage === 3) {
+    // Full filament - 8 thin strands packed
+    var nStr = 8;
+    var yStart = cy - (nStr-1)*7;
+    if (inTransition) {
+      if (ease < 0.5) {
+        drawStrand(cx, cy - 15, sLen, sThick, 0, 1 - ease*2, false);
+        drawStrand(cx, cy - 5, sLen, sThick, 0, 1 - ease*2, false);
+        drawStrand(cx, cy + 5, sLen, sThick, 0, 1 - ease*2, true);
+        drawStrand(cx, cy + 15, sLen, sThick, 0, 1 - ease*2, true);
+      }
+      if (ease > 0.3) {
+        var af = (ease - 0.3) / 0.7;
+        var fLen = sLen + 80;
+        for (var i = 0; i < nStr; i++) {
+          var fy = yStart + i * 14;
+          var isFlip = i % 2 === 1;
+          drawStrand(cx, fy, fLen, 4, 0, af, isFlip);
+        }
+        ctx.globalAlpha = af;
+        ctx.fillStyle = '#e3b341'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
+        ctx.fillText('FILAMENTO INTERMEDIO  (7-11 nm)', cx, yStart + nStr*14 + 14);
+        ctx.fillStyle = '#8b949e'; ctx.font = '9px Arial';
+        ctx.fillText('8 protofilamentos  |  sin polaridad  |  proteínas fibrosas', cx, yStart + nStr*14 + 26);
+        // diameter bracket
+        var rightX = cx + (sLen+80)/2 + 16;
+        ctx.strokeStyle = '#8b949e'; ctx.lineWidth = 1;
+        ctx.setLineDash([3,3]);
+        ctx.beginPath(); ctx.moveTo(rightX, yStart); ctx.lineTo(rightX, yStart+(nStr-1)*14); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(rightX-3, yStart); ctx.lineTo(rightX+3, yStart); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(rightX-3, yStart+(nStr-1)*14); ctx.lineTo(rightX+3, yStart+(nStr-1)*14); ctx.stroke();
+        ctx.fillStyle = '#8b949e'; ctx.font = '9px Arial'; ctx.textAlign = 'left';
+        ctx.fillText('7-11 nm', rightX+6, yStart+(nStr-1)*7);
+        ctx.globalAlpha = 1;
+      }
+    } else {
+      var fLen2 = sLen + 80;
+      for (var j = 0; j < nStr; j++) {
+        var fy2 = yStart + j * 14;
+        var isFlip2 = j % 2 === 1;
+        drawStrand(cx, fy2, fLen2, 4, 0, 1, isFlip2);
+      }
+      ctx.fillStyle = '#e3b341'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
+      ctx.fillText('FILAMENTO INTERMEDIO  (7-11 nm)', cx, yStart + nStr*14 + 14);
+      ctx.fillStyle = '#8b949e'; ctx.font = '9px Arial';
+      ctx.fillText('8 protofilamentos  |  sin polaridad  |  proteínas fibrosas', cx, yStart + nStr*14 + 26);
+      var rightX2 = cx + (fLen2)/2 + 16;
+      ctx.strokeStyle = '#8b949e'; ctx.lineWidth = 1;
+      ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(rightX2, yStart); ctx.lineTo(rightX2, yStart+(nStr-1)*14); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(rightX2-3, yStart); ctx.lineTo(rightX2+3, yStart); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(rightX2-3, yStart+(nStr-1)*14); ctx.lineTo(rightX2+3, yStart+(nStr-1)*14); ctx.stroke();
+      ctx.fillStyle = '#8b949e'; ctx.font = '9px Arial'; ctx.textAlign = 'left';
+      ctx.fillText('7-11 nm', rightX2+6, yStart+(nStr-1)*7);
+    }
+  }
+
+  // stage dots
+  var dotX = cx - (stages.length-1)*22;
+  for (var sd = 0; sd < stages.length; sd++) {
+    ctx.beginPath();
+    ctx.arc(dotX + sd*44, canvas.height-16, sd===currentStage ? 7 : 4, 0, Math.PI*2);
+    ctx.fillStyle = sd <= currentStage ? '#58a6ff' : '#30363d';
+    ctx.fill();
+    if (sd===currentStage) { ctx.strokeStyle='#58a6ff'; ctx.lineWidth=2; ctx.stroke(); }
+    ctx.fillStyle = '#8b949e'; ctx.font = '8px Arial'; ctx.textAlign = 'center';
+    ctx.fillText(sd+1, dotX+sd*44, canvas.height-12);
+  }
+}
+
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    this.beginPath();
+    this.moveTo(x+r, y);
+    this.lineTo(x+w-r, y);
+    this.quadraticCurveTo(x+w, y, x+w, y+r);
+    this.lineTo(x+w, y+h-r);
+    this.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+    this.lineTo(x+r, y+h);
+    this.quadraticCurveTo(x, y+h, x, y+h-r);
+    this.lineTo(x, y+r);
+    this.quadraticCurveTo(x, y, x+r, y);
+    this.closePath();
+  };
+}
+
+draw();
+updateInfo();
+</script>
+</body>
+</html>
